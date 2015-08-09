@@ -1,0 +1,31 @@
+{
+    "name": "ircmaxell/ballandchain",
+    "description": "PHP Implementation of Ball And Chain",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Anthony Ferrara",
+            "email": "ircmaxell@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.5",
+        "cilex/cilex": "1.*",
+        "paragonie/random_compat": "dev-master",
+        "indigophp/hash-compat": "^1.1@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^4.7",
+        "fabpot/php-cs-fixer": "1.*"
+    },
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {
+            "BallAndChain\\": "lib/BallAndChain/"
+        }
+    },
+    "bin": [
+        "bin/ballandchain"
+    ]
+
+}
