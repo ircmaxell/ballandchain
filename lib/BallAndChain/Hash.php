@@ -27,12 +27,18 @@ class Hash {
         $this->fileSize = (int) fstat($this->file)['size'];
     }
 
-    public function create($password, $rounds = 3, $pointerSize = 0, $dataSize = 16) {
+    public function create($password, $rounds = 3, $pointerSize = 0, $dataSize = 4) {
         if ($rounds > 62) {
             throw new \RuntimeException("Rounds setting is too high, it must be <= 62");
         } elseif ($rounds <= 1) {
             throw new \RuntimeException("Rounds setting is too low, it must be >= 2");
         }
+        if ($dataSize > 62) {
+            throw new \RuntimeException("Data size setting is too high, it must be <= 62");
+        } elseif ($dataSize <= 1) {
+            throw new \RuntimeException("Data size setting is too low, it must be >= 2");
+        }
+        $dataSizeDecoded = pow(2, $dataSize);
         $requiredPointer = ceil((log($this->fileSize) / log(2)) / 8);
         if ($pointerSize === 0) {
             // compute based on size of file
@@ -41,14 +47,14 @@ class Hash {
             throw new \RuntimeException("Pointer setting is too low, needs to be at least $requiredPointer bytes");
         }
         $key = hash(self::HASH_PRIMITIVE, $password, true);
-        $data = '';
         $pointers = '';
         $iterationCount = pow(2, $rounds);
+        $h = hash_init(self::HASH_PRIMITIVE);
         for ($i = 0; $i < $iterationCount; $i++) {
             $pointers .= $pointer = random_bytes($pointerSize);
-            $data .= $this->read($pointer, $dataSize);
+            hash_update($h, $this->read($pointer, $dataSizeDecoded));
         }
-        $result = $pointers . hash(self::HASH_PRIMITIVE, $data, true);
+        $result = $pointers . hash_final($h, true);
         $iv = random_bytes(self::IV_LENGTH);
         $header = pack('CCCC', 1, $rounds, $pointerSize, $dataSize);
         return base64_encode($header . $iv . openssl_encrypt($result, self::CIPHER_PRIMITIVE, $key, OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING, $iv));
@@ -61,21 +67,21 @@ class Hash {
         $iv = substr($hash, self::HEADER_SIZE, self::IV_LENGTH);
         $ciphertext = substr($hash, self::HEADER_SIZE + self::IV_LENGTH);
         $decrypted = openssl_decrypt($ciphertext, self::CIPHER_PRIMITIVE, $key, OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING, $iv);
-        $data = '';
         list (, $version, $rounds, $pointerSize, $dataSize) = unpack('C*', $header);
         $iterationCount = pow(2, $rounds);
+        $dataSizeDecoded = pow(2, $dataSize);
         if ($version !== 1) {
             throw new \RuntimeException("Unknown version encountered");
         }
         if (strlen($decrypted) !== self::HASH_LENGTH + $iterationCount * $pointerSize) {
             throw new \RuntimeException("Invalid data payload, was it truncated?");
         }
-        
+        $h = hash_init(self::HASH_PRIMITIVE);
         for ($i = 0; $i < $iterationCount; $i++) {
             $pointer = substr($decrypted, $i * $pointerSize, $pointerSize);
-            $data .= $this->read($pointer, $dataSize);
+            hash_update($h, $this->read($pointer, $dataSizeDecoded));
         }
-        $test = hash(self::HASH_PRIMITIVE, $data, true);
+        $test = hash_final($h, true);
         return hash_equals($test, substr($decrypted, $iterationCount * $pointerSize));
     }
 

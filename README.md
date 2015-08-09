@@ -71,7 +71,10 @@ There are a few options that you can pass to `->create()`:
 
  * dataSize
 
-    This is the amount of data to pull from each pointed location. The default is 16 bytes. Increasing this will *not* increase the output size of the result. You shouldn't have to change this either.
+    This is the power-of-2 amount of data to pull from each pointed location. The default is 4 (16 bytes). Increasing this will *not* increase the output size of the result. 
+
+    Increasing this number will provide brute-forcing protection as it increases the amount of I/O bandwidth consumed in a hashing operation.
+
 
 ## How this works
 
@@ -99,3 +102,25 @@ In pseudo-code:
 To validate a password, you decrypt the ciphertext to get the list of pointers. Then you lookup the pointers to rebuild the data array, and finally verify the hash of data matches the encrypted hash of data.
 
 Watch the video linked above. It's worth it.
+
+## Optimal Settings
+
+Ideally, you would use as large of a file as possible. 10TB is ideal. You want a file so large that an attacker can't copy it.
+
+Besides making the file large, you can also restrict the bandwidth to the server with the file. This introduces more potential security holes, but it may be a valid option.
+
+If your file is extremely large, the default settings should suffice. If we assume that an attacker cannot download the file, then rounds=3 and dataSize=4 are sufficient.
+
+If however there's a risk of file download, we can increase the two parameters to provide additional brute force protection. 
+
+Increasing rounds will increase the number of I/O operations that an attacker needs to do for each hash. Increasing dataSize will put stress on the I/O throughput the attacker needs for each hash. 
+
+To see how they are related, let's pick rounds=8 and dataSize=13, and look at what happens:
+
+ * The attacker needs to do 256 read operations per hash. On a modern SSD, that will limit them to approximately 400 hashes per second per SSD. This is because the current fastest SSDs can do approximately 100,000 random 4kb block reads per second.
+
+ * The attacker needs to read 8192 bytes for each read operation. Since the 8192 bytes requires 2 block reads, we would expect approximately 200 hashes per second per SSD.
+
+Combining the two, we'd expect an attacker to have approximately 200 hashes per second per SSD. That's quite good. However, if we dropped the dataSize to 12, the attacker can double their hashes per second. As a rule-of-thumb, below data size of 12, the size will have no effect on hash rate. Above 12, it will cause the hash rate to be cut in half for each step up. So we'd expect 14 to be approximately 100 hashes per second.
+
+If an attacker can fit the seed file into main memory, things change a bit. If we only look at bandwidth constraints (and not IOPS constraints), then we'd expect approximately 10gb/s per memory module. Meaning that using our prior settings, we'd expect approximately 1.3 million hashes per second (note this is an upper bound and assumes there is no overhead to random multiple block reads). Severely less than a simple SHA-1, but still too high for comfort. This is why making the file large and protecting it is incredibly important.
