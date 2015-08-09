@@ -45,7 +45,11 @@ And finally, to validate:
 
 It's that simple!
 
-With the default settings, the resulting hash is 176 bytes wide.
+## Output Size
+
+The output will change depending on the settings you provide. With a 10gb file, and using default settings, the output will be 124 bytes (characters) wide. 
+
+The output can get quite big depending on filesize and number of rounds specified.
 
 ## Options
 
@@ -53,11 +57,17 @@ There are a few options that you can pass to `->create()`:
 
  * rounds
 
-    This is the number of data pointers to lookup when building the hash. The default is 10, and the minimum you should use is 4. More rounds increases the output size, but increases overall security.
+    This is the number of data pointers to lookup when building the hash. It is expressed as a power-of-2. The minimum is `2` (resulting in using 4 pointers). The arbitrary maximum is 62 (maximum 64 bit signed integer power of 2). The default is 3, using 8 pointers.
+
+    Realistically, values of greater than 10 will be useless as the generated hash size increases drastically (by a factor of 2 each time).
+
+    Increasing this number will provide brute-forcing protection, as it doubles the number of I/O operations required to hash a password. This can provide additional protections if the seed file is leaked to an attacker.
 
  * pointerSize
 
-    This is the size of the pointer to generate. The default is 8 bytes. You shouldn't have to change this. If you do, it will affect the output size of the resultant hash.
+    This is the size of the pointer to generate. The default will detect the smallest pointer required to access the entire file (a 255 byte file will use a pointer size of 1, a 10GB file will use 5 bytes).
+
+    You can override the default, but beware that setting too short of a size will raise an error.
 
  * dataSize
 

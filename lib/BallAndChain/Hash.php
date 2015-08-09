@@ -27,11 +27,24 @@ class Hash {
         $this->fileSize = (int) fstat($this->file)['size'];
     }
 
-    public function create($password, $rounds = 10, $pointerSize = 8, $dataSize = 16) {
+    public function create($password, $rounds = 3, $pointerSize = 0, $dataSize = 16) {
+        if ($rounds > 62) {
+            throw new \RuntimeException("Rounds setting is too high, it must be <= 62");
+        } elseif ($rounds <= 1) {
+            throw new \RuntimeException("Rounds setting is too low, it must be >= 2");
+        }
+        $requiredPointer = ceil((log($this->fileSize) / log(2)) / 8);
+        if ($pointerSize === 0) {
+            // compute based on size of file
+            $pointerSize = $requiredPointer;
+        } elseif ($pointerSize < $requiredPointer) {
+            throw new \RuntimeException("Pointer setting is too low, needs to be at least $requiredPointer bytes");
+        }
         $key = hash(self::HASH_PRIMITIVE, $password, true);
         $data = '';
         $pointers = '';
-        for ($i = 0; $i < $rounds; $i++) {
+        $iterationCount = pow(2, $rounds);
+        for ($i = 0; $i < $iterationCount; $i++) {
             $pointers .= $pointer = random_bytes($pointerSize);
             $data .= $this->read($pointer, $dataSize);
         }
@@ -50,23 +63,24 @@ class Hash {
         $decrypted = openssl_decrypt($ciphertext, self::CIPHER_PRIMITIVE, $key, OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING, $iv);
         $data = '';
         list (, $version, $rounds, $pointerSize, $dataSize) = unpack('C*', $header);
+        $iterationCount = pow(2, $rounds);
         if ($version !== 1) {
             throw new \RuntimeException("Unknown version encountered");
         }
-        if (strlen($decrypted) !== self::HASH_LENGTH + $rounds * $pointerSize) {
+        if (strlen($decrypted) !== self::HASH_LENGTH + $iterationCount * $pointerSize) {
             throw new \RuntimeException("Invalid data payload, was it truncated?");
         }
-
-        for ($i = 0; $i < $rounds; $i++) {
+        
+        for ($i = 0; $i < $iterationCount; $i++) {
             $pointer = substr($decrypted, $i * $pointerSize, $pointerSize);
             $data .= $this->read($pointer, $dataSize);
         }
         $test = hash(self::HASH_PRIMITIVE, $data, true);
-        return hash_equals($test, substr($decrypted, $rounds * $pointerSize));
+        return hash_equals($test, substr($decrypted, $iterationCount * $pointerSize));
     }
 
     protected function read($pointer, $dataSize) {
-        $numeric = abs(unpack('q', $pointer)[1]);
+        $numeric = abs(unpack('q', str_pad($pointer, 8, chr(0), STR_PAD_LEFT))[1]);
         $offset = $numeric % $this->fileSize;
         fseek($this->file, $offset);
         $data = fread($this->file, $dataSize);
