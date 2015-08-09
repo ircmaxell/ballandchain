@@ -16,11 +16,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class Build extends Command {
 
-    /**
-     * @var Tuli\Rule[]
-     */
-    protected $rules = [];
-
     protected function configure() {
         $this->setName('build')
             ->setDescription('Build a seed file')
